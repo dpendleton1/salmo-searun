@@ -2,28 +2,26 @@ import pandas as pd
 
 df_allsmolts = pd.read_csv('data/allsmolts.csv', low_memory=False)
 
+## make data types within columns consistent. They are not consistent because I pasted two datasets together.
 
+# datetimes
 for col in ['Period', 'FirstTS', 'LastTS']:
     df_allsmolts[col] = pd.to_datetime(df_allsmolts[col], format='mixed').dt.strftime('%Y-%m-%d %H:%M:%S')
 
-df_allsmolts[['Period', 'FirstTS', 'LastTS']].head()
-
-# clean up inconsistencies
-
-# 1. Drop fully empty columns
-df_allsmolts.drop(columns=['Frequency', 'avgPower', 'AntennaID'], inplace=True)
-
-# 2. TagId: coerce to numeric (Int64 to support NaN)
+# TagId: coerce to numeric (Int64 to support NaN)
 df_allsmolts['TagId'] = pd.to_numeric(df_allsmolts['TagId'], errors='coerce').astype('Int64')
 
-# 3. SensorType: replace blank/whitespace strings with NaN
+# SensorType: replace blank/whitespace strings with NaN
 df_allsmolts['SensorType'] = df_allsmolts['SensorType'].str.strip().replace('', pd.NA)
 
-# 4. RxID: coerce to numeric (Int64 to support NaN)
+# RxID: coerce to numeric (Int64 to support NaN)
 df_allsmolts['RxID'] = pd.to_numeric(df_allsmolts['RxID'], errors='coerce').astype('Int64')
 
-# 5. UTMZone: cast float to Int64
+# UTMZone: cast float to Int64
 df_allsmolts['UTMZone'] = df_allsmolts['UTMZone'].astype('Int64')
+
+# Drop fully empty columns
+df_allsmolts.drop(columns=['Frequency', 'avgPower', 'AntennaID'], inplace=True)
 
 # Verify
 for col in df_allsmolts.columns:
@@ -35,21 +33,20 @@ for col in df_allsmolts.columns:
 # sort by TagID and FirstTS
 df_allsmolts = df_allsmolts.sort_values(['TagId', 'FirstTS']).reset_index(drop=True)
 
+#####################################################################################################
+
 # remove dates before 2008
-df_allsmolts = df_allsmolts[df_allsmolts['Period'] > '2007-12-31 23:59:59'].reset_index(drop=True)
+df_allsmolts = df_allsmolts[df_allsmolts['Period'] > '2011-12-31 23:59:59'].reset_index(drop=True)
 df_allsmolts.shape
 
 # create a new column the concatenates Codespace and IDCode. These two columns are supposed to be concatenated in the TagId column, but that's not always the case.
 df_allsmolts['TagCode'] = df_allsmolts['Codespace'] + '-' + df_allsmolts['IDCode'].astype(str)
 
+# Codespace and IDCode are no longer needed
+df_allsmolts = df_allsmolts.drop(columns=['Codespace', 'IDCode'])
+
 # tagtype and Species only contain one value 'Acoustic' and 'ATS' so we can remove those columns
 df_allsmolts = df_allsmolts.drop(columns=['tagtype', 'Species'])
-
-# strip off numbers at the end of SiteCode entries to try and determine how many Sites there are. We think the number suffix represents receiver number.
-import re
-df_allsmolts['SiteCode_base'] = df_allsmolts['SiteCode'].map(lambda x: re.sub(r'\d+$', '', x) if pd.notna(x) else x)
-df_allsmolts['SiteCode_base'].nunique()
-sorted(df_allsmolts['SiteCode_base'].dropna().unique().tolist())
 
 # convert easting and northing to lat and long
 from pyproj import Proj, Transformer
@@ -68,10 +65,8 @@ def utm_to_latlon(row):
 df_allsmolts[['Latitude', 'Longitude']] = df_allsmolts.apply(utm_to_latlon, axis=1)
 df_allsmolts[['Latitude', 'Longitude']].dropna().head()
 
-
 # write out a cleaned up .csv
 df_allsmolts.to_csv('data/all_smolts_clean.csv', index=False)
-
 
 # generate an interactive plot with all locations in this dataset
 
