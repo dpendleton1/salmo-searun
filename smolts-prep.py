@@ -42,9 +42,6 @@ df_allsmolts.shape
 # create a new column the concatenates Codespace and IDCode. These two columns are supposed to be concatenated in the TagId column, but that's not always the case.
 df_allsmolts['TagCode'] = df_allsmolts['Codespace'] + '-' + df_allsmolts['IDCode'].astype(str)
 
-# Codespace and IDCode are no longer needed
-df_allsmolts = df_allsmolts.drop(columns=['Codespace', 'IDCode'])
-
 # tagtype and Species only contain one value 'Acoustic' and 'ATS' so we can remove those columns
 df_allsmolts = df_allsmolts.drop(columns=['tagtype', 'Species'])
 
@@ -65,24 +62,57 @@ def utm_to_latlon(row):
 df_allsmolts[['Latitude', 'Longitude']] = df_allsmolts.apply(utm_to_latlon, axis=1)
 df_allsmolts[['Latitude', 'Longitude']].dropna().head()
 
-# write out a cleaned up .csv
-df_allsmolts.to_csv('data/all_smolts_clean.csv', index=False)
+# # write out a cleaned up .csv
+# df_allsmolts.to_csv('data/all_smolts_clean.csv', index=False)
 
-# generate an interactive plot with all locations in this dataset
+# # generate an interactive plot with all locations in this dataset
+# import plotly.express as px
 
-import plotly.express as px
+# df_plot = df_allsmolts[['Latitude', 'Longitude', 'LocationCode', 'SiteCode']].dropna(subset=['Latitude', 'Longitude']).drop_duplicates()
 
-df_plot = df_allsmolts[['Latitude', 'Longitude', 'LocationCode', 'SiteCode']].dropna(subset=['Latitude', 'Longitude']).drop_duplicates()
+# fig = px.scatter_map(
+#     df_plot,
+#     lat='Latitude',
+#     lon='Longitude',
+#     hover_data={'LocationCode': True, 'SiteCode': True, 'Latitude': ':.4f', 'Longitude': ':.4f'},
+#     zoom=5,
+#     height=700,
+#     title='Acoustic Receiver Locations'
+# )
 
-fig = px.scatter_map(
-    df_plot,
-    lat='Latitude',
-    lon='Longitude',
-    hover_data={'LocationCode': True, 'SiteCode': True, 'Latitude': ':.4f', 'Longitude': ':.4f'},
-    zoom=5,
-    height=700,
-    title='Acoustic Receiver Locations'
+# fig.update_layout(map_style='open-street-map')
+# fig.show()
+
+# Prompt: 
+# Identify FishID that were detected at 
+# the following 'LocationCode' or 'SiteCode': FTPNT, FP02, FP03, 
+# WP01, WP02, WP03, WP04, WP05
+# Remove records that occurred earlier in time than the first 
+# detection at one of the 'LocationCode' or 'SiteCode' listed above.
+
+target_locations = {'FTPNT', 'FP02', 'FP03', 'WP01', 'WP02', 'WP03', 'WP04', 'WP05'}
+
+at_target = df_allsmolts[
+    df_allsmolts['LocationCode'].isin(target_locations) |
+    df_allsmolts['SiteCode'].isin(target_locations)
+]
+
+first_detection = (
+    at_target.groupby('FishID')['FirstTS']
+    .min()
+    .rename('first_target_ts')
+    .reset_index()
 )
 
-fig.update_layout(map_style='open-street-map')
-fig.show()
+df_filtered = (
+    df_allsmolts
+    .merge(first_detection, on='FishID', how='inner')
+    .query('FirstTS >= first_target_ts')
+    .drop(columns='first_target_ts')
+    .reset_index(drop=True)
+)
+
+# 1,600 unique FishIDs were detected at the target locations
+# Records dropped from 146,738 → 15,705 (fish not detected at target locations are excluded entirely, and pre-detection records for qualifying fish are removed)
+
+df_filtered.to_csv('data/all_smolts_filtered_clean.csv', index=False)
