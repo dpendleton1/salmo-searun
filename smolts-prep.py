@@ -116,3 +116,18 @@ df_filtered = (
 # Records dropped from 146,738 → 15,705 (fish not detected at target locations are excluded entirely, and pre-detection records for qualifying fish are removed)
 
 df_filtered.to_csv('data/all_smolts_filtered_clean.csv', index=False)
+
+# generate an interactive plot with all locations in this dataset
+import plotly.express as px
+
+df_plot = df_filtered[['Latitude', 'Longitude', 'LocationCode', 'SiteCode']].dropna(subset=['Latitude', 'Longitude']).drop_duplicates()
+
+fig = px.scatter_map(
+    df_plot,
+    lat='Latitude',
+    lon='Longitude',
+    hover_data={'LocationCode': True, 'SiteCode': True, 'Latitude': ':.4f', 'Longitude': ':.4f'},
+    zoom=5,
+    height=700,
+    title='Acoustic Receiver Locations'
+)
