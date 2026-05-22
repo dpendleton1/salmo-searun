@@ -37,6 +37,10 @@ df_allsmolts['RxID'] = pd.to_numeric(df_allsmolts['RxID'], errors='coerce').asty
 # UTMZone: cast float to Int64
 df_allsmolts['UTMZone'] = df_allsmolts['UTMZone'].astype('Int64')
 
+# Rename some columns
+#df_allsmolts = df_allsmolts.rename(columns={'IDCode': 'PingerIDCode'})
+df_allsmolts = df_allsmolts.rename(columns={'RKM': 'RiverKm'})
+
 # Drop fully empty columns
 df_allsmolts.drop(columns=['Frequency', 'avgPower', 'AntennaID'], inplace=True)
 
@@ -52,52 +56,58 @@ df_allsmolts = df_allsmolts.sort_values(['TagId', 'FirstTS']).reset_index(drop=T
 
 #####################################################################################################
 
-# remove dates before 2012
-df_allsmolts = df_allsmolts[df_allsmolts['Period'] > '2011-12-31 23:59:59'].reset_index(drop=True)
-df_allsmolts.shape
+# # remove dates before 2012
+# df_allsmolts = df_allsmolts[df_allsmolts['Period'] > '2011-12-31 23:59:59'].reset_index(drop=True)
+# df_allsmolts.shape
 
-# create a new column the concatenates Codespace and IDCode. These two columns are supposed to be concatenated in the TagId column, but that's not always the case.
-df_allsmolts['TagCode'] = df_allsmolts['Codespace'] + '-' + df_allsmolts['IDCode'].astype(str)
+# # create a new column the concatenates Codespace and IDCode. These two columns are supposed to be concatenated in the TagId column, but that's not always the case.
+# df_allsmolts['TagCode'] = df_allsmolts['Codespace'] + '-' + df_allsmolts['IDCode'].astype(str)
 
 # tagtype and Species only contain one value 'Acoustic' and 'ATS' so we can remove those columns
-df_allsmolts = df_allsmolts.drop(columns=['tagtype', 'Species'])
+#df_allsmolts = df_allsmolts.drop(columns=['Period','tagtype', 'Species','Frequency','avgPower','AntennaID','LocationCode','UTMZone','AltFishID'])
+
 
 #####################################################################################################
 
+#Looking at 'allsmolts.csv', I want to remove all records for each 'IDCode' that were not detected 
+# at one of the following 'SiteCode' that have one of the following prefixes: 
+# 'FP','FTPN','WPLP','WP-','WP0','DH','LH','ER','MH','OH'. If a particular 'IDCode' was detected 
+# at one of the 'SiteCode' in my list, then I want to keep all other detections for that 'IDCode', 
+# even if they have a 'SiteCode' not contained in my list.
 
-# Prompt: 
-# Identify FishID that were detected at 
-# the following 'LocationCode' or 'SiteCode': FTPNT, FP02, FP03, 
-# WP01, WP02, WP03, WP04, WP05
-# Remove records that occurred earlier in time than the first 
-# detection at one of the 'LocationCode' or 'SiteCode' listed above.
+prefixes_to_keep = ('FP', 'FTPN', 'WPLP', 'WP-', 'WP0', 'DH', 'LH', 'ER', 'MH', 'OH')
 
-target_locations = {'FTPNT', 'FP02', 'FP03', 'WP01', 'WP02', 'WP03', 'WP04', 'WP05'}
+# IDCodes detected at least once at a SiteCode matching one of the prefixes
+valid_ids = df_allsmolts.loc[
+    df_allsmolts['SiteCode'].str.startswith(prefixes_to_keep, na=False), 'IDCode'
+].unique()
 
-at_target = df_allsmolts[
-    df_allsmolts['LocationCode'].isin(target_locations) |
-    df_allsmolts['SiteCode'].isin(target_locations)
-]
+# Keep all rows for those IDCodes
+df_filtered = df_allsmolts[df_allsmolts['IDCode'].isin(valid_ids)].reset_index(drop=True)
+df_filtered.shape
 
-first_detection = (
-    at_target.groupby('FishID')['FirstTS']
+# Remove records for 'IDCode' that occurred before the first detection at a target 'SiteCode'
+
+# Find the first detection timestamp at a target SiteCode for each IDCode
+first_target_ts = (
+    df_filtered[df_filtered['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+    .groupby('IDCode')['FirstTS']
     .min()
     .rename('first_target_ts')
-    .reset_index()
 )
 
+# Merge back and keep only rows at or after that timestamp
 df_filtered = (
-    df_allsmolts
-    .merge(first_detection, on='FishID', how='inner')
+    df_filtered
+    .merge(first_target_ts, on='IDCode', how='left')
     .query('FirstTS >= first_target_ts')
     .drop(columns='first_target_ts')
     .reset_index(drop=True)
 )
 
-# 1,600 unique FishIDs were detected at the target locations
-# Records dropped from 146,738 → 15,705 (fish not detected at target locations are excluded entirely, and pre-detection records for qualifying fish are removed)
+df_filtered.shape
 
-df_filtered.to_csv('data/all_smolts_filtered_clean.csv', index=False)
+df_filtered.to_csv('data/all_smolts_filtered_clean1.csv', index=False)
 
 # generate an interactive plot with all locations in this dataset
 import plotly.express as px
