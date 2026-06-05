@@ -29,3 +29,4 @@ dupes[['SiteCode', 'DetectDateTime', 'Source', 'IDCode']].sort_values(['SiteCode
 merged.to_csv("data/dat_otn_nefsc.csv", index=False)
 
 #NEXT WE NEED TO GROUP SITECODES WITHIN PB. NOT SURE BEST PLACE TO DO THIS.
+# AFTER THAT WE NEED TO REMOVE FISH THAT NEVER GOT TO HALIFAX
