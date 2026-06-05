@@ -54,70 +54,109 @@ for db_file in accdb_files:
     # Merges
     dep_loc   = dep.merge(loc, on="SiteCode", how="left", suffixes=("_dep", "_loc"))
     det_smolt = det.merge(smolt, on="PingerIDCode", how="left", suffixes=("_det", "_smolt"))
-    combined  = det_smolt.merge(dep_loc, on="ReceiverSN", how="left", suffixes=("", "_dep"))
+    dat_nefsc  = det_smolt.merge(dep_loc, on="ReceiverSN", how="left", suffixes=("", "_dep"))
 
     # Keep only columns present in this year
-    available = [c for c in cols_wanted if c in combined.columns]
-    combined = combined[available].copy()
-    combined['Year'] = year
+    available = [c for c in cols_wanted if c in dat_nefsc.columns]
+    dat_nefsc = dat_nefsc[available].copy()
+    dat_nefsc['Year'] = year
 
-    all_years.append(combined)
+    all_years.append(dat_nefsc)
 
 # Combine all years
-all_combined = pd.concat(all_years, ignore_index=True)
+dat_nefsc = pd.concat(all_years, ignore_index=True)
+
+# create latitude and longitude columns from easting, northing and UTMZone
+# convert easting and northing to lat and long
+# WARNING: this takes a long time because it uses pyproj's Transformer for each row, which is not vectorized (i think)
+from pyproj import Proj, Transformer
+def utm_to_latlon(row):
+    if pd.isna(row['RefUTMEast']) or pd.isna(row['RefUTMNorth']):
+        return pd.Series([None, None])
+    transformer = Transformer.from_crs(
+        "EPSG:32619",  # WGS84 UTM Zone 19N
+        "EPSG:4326",
+        always_xy=True
+    )
+    lon, lat = transformer.transform(row['RefUTMEast'], row['RefUTMNorth'])
+    return pd.Series([lat, lon])
+
+dat_nefsc[['Latitude', 'Longitude']] = dat_nefsc.apply(utm_to_latlon, axis=1)
+# dat_nefsc[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
+
+# save dat_nefsc to csv
+# save after calculating lat/lon from northing/easting because it takes a long time and we don't want to have to recalculate it every time we run the script
+dat_nefsc.to_csv(out_dir / "dat_nefsc_latlon_4reload.csv", index=False)
+# reload dat_nefsc from csv to avoid having to recalculate lat/lon every time we run the script
+dat_nefsc = pd.read_csv(out_dir / "dat_nefsc_latlon_4reload.csv")
 
 # Rename some columns
-all_combined = all_combined.rename(columns={'PingerIDCode': 'IDCode'})
-all_combined = all_combined.rename(columns={'RefUTMEast': 'Easting'})
-all_combined = all_combined.rename(columns={'RefUTMNorth': 'Northing'})
+dat_nefsc = dat_nefsc.rename(columns={'PingerIDCode': 'IDCode'})
+
+# add "NEFSC" identier for the source of the data so it can be identified when we combine with OTN data
+dat_nefsc['Source'] = 'NEFSC'
 
 # add Year column based on the year of the first detection time (FirstTS)
-all_combined['Year'] = all_combined['DetectDateTime'].dt.year
+dat_nefsc['Year'] = dat_nefsc['DetectDateTime'].dt.year
 
-# remove Year < 2012
-all_combined = all_combined[all_combined['Year'] >= 2012].reset_index(drop=True)
+# remove Year < 2008
+dat_nefsc = dat_nefsc[dat_nefsc['Year'] >= 2008].reset_index(drop=True)
 
-# save all_combined to csv
-all_combined.to_csv(out_dir / "all_combined.csv", index=False)
+# sort
+dat_nefsc = dat_nefsc.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
+
+# Rearrange columns
+dat_nefsc = dat_nefsc[
+    ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime', 'Longitude', 'Latitude', 
+    'RiverKm','ForkLength', 'Weight']
+]
+
+# save dat_nefsc to csv
+dat_nefsc.to_csv(out_dir / "dat_nefsc.csv", index=False)
 
 # Keep only SiteCodes in the ocean
 prefixes_to_keep = ('FP', 'WP0', 'DH', 'LH', 'ER', 'MH', 'OH', 'GoMOOSF', 'GoMOOSE')
-all_combined = all_combined[all_combined['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+dat_nefsc_pb = dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
 
 # Find the first matching detection time per fish
 first_match = (
-    all_combined[all_combined['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+    dat_nefsc_pb[dat_nefsc_pb['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
     .groupby('IDCode')['DetectDateTime']
     .min()
     .rename('FirstMatchTime')
 )
 
 # Keep all records at or after that first match time
-summary = (
-    all_combined
-    .assign(IDCode=pd.to_numeric(all_combined['IDCode'], errors='coerce'))
+dat_nefsc_pb_forward = (
+    dat_nefsc_pb
+    .assign(IDCode=pd.to_numeric(dat_nefsc['IDCode'], errors='coerce'))
     .join(first_match, on='IDCode')
     .query('DetectDateTime >= FirstMatchTime')
     .drop(columns='FirstMatchTime')
-    .sort_values(['IDCode', 'DetectDateTime'])
+    .sort_values(['Year', 'IDCode', 'DetectDateTime'])
     .reset_index(drop=True)
 )
 
-grp = summary.groupby(['IDCode', 'SiteCode'])['DetectDateTime']
+dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
-first_last = pd.concat([grp.min(), grp.max()], axis=1)
-first_last.columns = ['first', 'last']
-first_last = first_last.reset_index()
+# now combine files
 
-summary_fl = (
-    summary
-    .merge(first_last, on=['IDCode', 'SiteCode'])
-    .query('DetectDateTime == first or DetectDateTime == last')
-    .drop(columns=['first', 'last'])
-    .drop_duplicates()
-    .sort_values(['IDCode', 'DetectDateTime'])
-    .reset_index(drop=True)
-)
+
+# grp = summary.groupby(['IDCode', 'SiteCode'])['DetectDateTime']
+
+# first_last = pd.concat([grp.min(), grp.max()], axis=1)
+# first_last.columns = ['first', 'last']
+# first_last = first_last.reset_index()
+
+# summary_fl = (
+#     summary
+#     .merge(first_last, on=['IDCode', 'SiteCode'])
+#     .query('DetectDateTime == first or DetectDateTime == last')
+#     .drop(columns=['first', 'last'])
+#     .drop_duplicates()
+#     .sort_values(['IDCode', 'DetectDateTime'])
+#     .reset_index(drop=True)
+# )
 
 # # Keep all detections, sorted by PingerIDCode and DetectDateTime
 # summary = (
@@ -156,3 +195,6 @@ summary_fl = summary_fl.sort_values(['Year', 'IDCode', 'FirstTS', 'SiteCode']).r
 summary_fl.head()
 summary_fl.shape
 summary_fl.to_csv(out_dir / "combined_all_years_ocean_onlyFL.csv", index=False)
+
+
+
