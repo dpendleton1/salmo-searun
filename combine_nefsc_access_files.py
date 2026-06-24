@@ -15,8 +15,16 @@ tables = ['tblDetection', 'tblSmoltDetails', 'tblLocations', 'tblDeployment']
 cols_wanted = [
     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'DetectDateTime',
     'RefUTMEast', 'RefUTMNorth', 'RiverKm',
-    'ForkLength', 'Weight'
+    'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
 ]
+
+# cols_wanted = [
+#     'SiteCode','DeploymentType','StartOrEnd','DeployDateTime','ReceiverSN','DepUTMEast','DepUTMNorth','DepUTMZone',
+#     'Array','ArrayGroup','LocationGroup','RefUTMEast','RefUTMNorth','RefUTMZone','RiverKm',
+#     'DetectionID','ReceiverSN','PingerSN','PingerIDCode','DetectDateTime',
+#     'SmoltDetailsID','SpeciesCode','ForkLength', 'Weight', 'OriginCode',        
+# ]
+
 
 all_years = []
 
@@ -66,30 +74,6 @@ for db_file in accdb_files:
 # Combine all years
 dat_nefsc = pd.concat(all_years, ignore_index=True)
 
-# create latitude and longitude columns from easting, northing and UTMZone
-# convert easting and northing to lat and long
-# WARNING: this takes a long time because it uses pyproj's Transformer for each row, which is not vectorized (i think)
-from pyproj import Proj, Transformer
-def utm_to_latlon(row):
-    if pd.isna(row['RefUTMEast']) or pd.isna(row['RefUTMNorth']):
-        return pd.Series([None, None])
-    transformer = Transformer.from_crs(
-        "EPSG:32619",  # WGS84 UTM Zone 19N
-        "EPSG:4326",
-        always_xy=True
-    )
-    lon, lat = transformer.transform(row['RefUTMEast'], row['RefUTMNorth'])
-    return pd.Series([lat, lon])
-
-dat_nefsc[['Latitude', 'Longitude']] = dat_nefsc.apply(utm_to_latlon, axis=1)
-# dat_nefsc[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
-
-# save dat_nefsc to csv
-# save after calculating lat/lon from northing/easting because it takes a long time and we don't want to have to recalculate it every time we run the script
-dat_nefsc.to_csv(out_dir / "dat_nefsc_latlon_4reload.csv", index=False)
-# reload dat_nefsc from csv to avoid having to recalculate lat/lon every time we run the script
-# dat_nefsc = pd.read_csv(out_dir / "dat_nefsc_latlon_4reload.csv")
-
 # Rename some columns
 dat_nefsc = dat_nefsc.rename(columns={'PingerIDCode': 'IDCode'})
 
@@ -105,10 +89,19 @@ dat_nefsc = dat_nefsc[dat_nefsc['Year'] >= 2008].reset_index(drop=True)
 # sort
 dat_nefsc = dat_nefsc.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
 
+# cols_wanted = [
+#     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'DetectDateTime',
+#     'RefUTMEast', 'RefUTMNorth', 'RiverKm',
+#     'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
+# ]
+
 # Rearrange columns
 dat_nefsc = dat_nefsc[
-    ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime', 'Longitude', 'Latitude', 
-    'RiverKm','ForkLength', 'Weight']
+    ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime',
+    'OriginCode', 'ArrayGroup', 'DeploymentType', 
+    'RefUTMEast', 'RefUTMNorth', 
+    'RiverKm','ForkLength', 'Weight', 
+    'ReceiverSN']
 ]
 
 # save dat_nefsc to csv
@@ -138,6 +131,40 @@ dat_nefsc_pb_forward = (
 )
 
 dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
+
+dat_nefsc_pb_forward_deploy = dat_nefsc_pb_forward[dat_nefsc_pb_forward['DeploymentType'] == 'Deploy'].reset_index(drop=True)
+
+dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
+dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy.csv", index=False)
+
+# create latitude and longitude columns from easting, northing and UTMZone
+# convert easting and northing to lat and long
+# WARNING: this takes a long time because it uses pyproj's Transformer for each row, which is not vectorized (i think)
+from pyproj import Proj, Transformer
+def utm_to_latlon(row):
+    if pd.isna(row['RefUTMEast']) or pd.isna(row['RefUTMNorth']):
+        return pd.Series([None, None])
+    transformer = Transformer.from_crs(
+        "EPSG:32619",  # WGS84 UTM Zone 19N
+        "EPSG:4326",
+        always_xy=True
+    )
+    lon, lat = transformer.transform(row['RefUTMEast'], row['RefUTMNorth'])
+    return pd.Series([lat, lon])
+
+dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']] = dat_nefsc_pb_forward_deploy.apply(utm_to_latlon, axis=1)
+dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
+
+dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy_latlon.csv", index=False)
+
+# save dat_nefsc to csv
+# save after calculating lat/lon from northing/easting because it takes a long time and we don't want to have to recalculate it every time we run the script
+dat_nefsc.to_csv(out_dir / "dat_nefsc_latlon_4reload.csv", index=False)
+# reload dat_nefsc from csv to avoid having to recalculate lat/lon every time we run the script
+# dat_nefsc = pd.read_csv(out_dir / "dat_nefsc_latlon_4reload.csv")
+
+
+
 
 # BELOW THIS LINE WE DON'T NEED. KEEPING INCASE I WANT THIS CODE LATER
 # summary_fl = (
