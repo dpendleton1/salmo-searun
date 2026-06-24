@@ -157,14 +157,6 @@ dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']].dropna().head() #drops an
 
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy_latlon.csv", index=False)
 
-# save dat_nefsc to csv
-# save after calculating lat/lon from northing/easting because it takes a long time and we don't want to have to recalculate it every time we run the script
-dat_nefsc.to_csv(out_dir / "dat_nefsc_latlon_4reload.csv", index=False)
-# reload dat_nefsc from csv to avoid having to recalculate lat/lon every time we run the script
-# dat_nefsc = pd.read_csv(out_dir / "dat_nefsc_latlon_4reload.csv")
-
-
-
 
 # BELOW THIS LINE WE DON'T NEED. KEEPING INCASE I WANT THIS CODE LATER
 # summary_fl = (
