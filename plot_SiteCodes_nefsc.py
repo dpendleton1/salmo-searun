@@ -2,7 +2,7 @@ import pandas as pd
 import folium
 from pyproj import Transformer
 
-summary = dat_nefsc_pb_forward
+summary = dat_nefsc_pb_forward_deploy
 
 # Deduplicate to one row per SiteCode
 sites = (
