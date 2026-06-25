@@ -26,7 +26,7 @@ cols_wanted = [
     'RiverKm','ForkLength', 'Weight', 
     'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
     'DeploymentType', 'DeployDateTime','DepUTMEast','DepUTMNorth',
-    'SmoltDetailsID','SpeciesCode','StartOrEnd'
+    'SmoltDetailsID','SpeciesCode'
 ]
 
 all_years = []
@@ -100,7 +100,7 @@ dat_nefsc = dat_nefsc[
     'RiverKm', 'ForkLength', 'Weight',
     'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
     'DeploymentType', 'DeployDateTime', 'DepUTMEast', 'DepUTMNorth',
-    'SmoltDetailsID', 'SpeciesCode', 'StartOrEnd']
+    'SmoltDetailsID', 'SpeciesCode']
 ]
 
 # save dat_nefsc to csv
@@ -108,31 +108,29 @@ dat_nefsc.to_csv(out_dir / "dat_nefsc.csv", index=False)
 
 # Keep only SiteCodes in the ocean
 prefixes_to_keep = ('FP', 'WP0', 'DH', 'LH', 'ER', 'MH', 'OH', 'GoMOOSF', 'GoMOOSE')
-dat_nefsc_pb = dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+#dat_nefsc = dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
 
-# Find the first matching detection time per fish
+#----------------
+# 1. First, find the first match time using only the keep-prefixes
 first_match = (
-    dat_nefsc_pb[dat_nefsc_pb['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+    dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
     .groupby('IDCode')['DetectDateTime']
     .min()
     .rename('FirstMatchTime')
 )
 
-# Keep all records at or after that first match time
-dat_nefsc_pb_forward = (
-    dat_nefsc_pb
-    .assign(IDCode=pd.to_numeric(dat_nefsc['IDCode'], errors='coerce'))
-    .join(first_match, on='IDCode')
-    .query('DetectDateTime >= FirstMatchTime')
-    .drop(columns='FirstMatchTime')
-    .sort_values(['Year', 'IDCode', 'DetectDateTime'])
-    .reset_index(drop=True)
-)
+# 2. Now filter the WHOLE dat_nefsc dataset, 
+# keeping records after the first match OR records that are 'RELEASE'
+after_first_match = dat_nefsc['DetectDateTime'] >= first_match.reindex(dat_nefsc['IDCode']).values
+is_release = dat_nefsc['SiteCode'] == 'RELEASE'
+
+# 3. Apply filter to the full dataset
+dat_nefsc_pb_forward = dat_nefsc[after_first_match | is_release].sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
 
 dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
+# Keep only rows where DeploymentType is 'Deploy'
 dat_nefsc_pb_forward_deploy = dat_nefsc_pb_forward[dat_nefsc_pb_forward['DeploymentType'] == 'Deploy'].reset_index(drop=True)
-
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy.csv", index=False)
 
 # create latitude and longitude columns from easting, northing and UTMZone
@@ -152,5 +150,4 @@ def utm_to_latlon(row):
 
 dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']] = dat_nefsc_pb_forward_deploy.apply(utm_to_latlon, axis=1)
 #dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
-
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy_latlon.csv", index=False)
