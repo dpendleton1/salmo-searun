@@ -14,6 +14,16 @@ dat_otn = pd.concat([
     for f in files
 ], ignore_index=True)
 
+# there should not be any duplicate records accross files, but there are. we must correct this:
+# check for duplicate rows in concatenated dataframe
+# Show all rows that are duplicates of another row
+duplicates = dat_otn[dat_otn.duplicated(keep=False)]
+# See how many total duplicate rows exist
+total_duplicates = dat_otn.duplicated().sum()
+print(total_duplicates)
+# Remove all rows that are exact duplicates
+dat_otn = dat_otn.drop_duplicates()
+
 # Cast depth columns to float; invalid/empty strings become NaN
 dat_otn["bottomDepth"] = pd.to_numeric(dat_otn["bottomDepth"], errors="coerce")
 dat_otn["receiverDepth"] = pd.to_numeric(dat_otn["receiverDepth"], errors="coerce")
@@ -28,14 +38,14 @@ dat_otn["dateCollectedUTC"] = dat_otn["dateCollectedUTC"].dt.tz_localize(None)
 # e.g. A69-1601-8651 -> 8651
 dat_otn["IDCode"] = dat_otn["tagName"].str.split("-").str[-1].astype("Int64")
 
-# Drop columns not needed for this analysis
-dat_otn.drop(columns=[
-    "collectionCode", "dateLastModified", "geometry","sensorRaw",
-    "sensorName", "sensorType", "sensorValue", "sensorUnit",
-    "geodeticDatum", "uncorrectedDateCollectedUTC", "contactPOC", "contactPI",
-    "citation","codeSpace","scientificName","commonName","detectedBy",
-    'receiverDepth','bottomDepth', 'localArea'
-], inplace=True)
+# # Drop columns not needed for this analysis
+# dat_otn.drop(columns=[
+#     "collectionCode", "dateLastModified", "geometry","sensorRaw",
+#     "sensorName", "sensorType", "sensorValue", "sensorUnit",
+#     "geodeticDatum", "uncorrectedDateCollectedUTC", "contactPOC", "contactPI",
+#     "citation","codeSpace","scientificName","commonName","detectedBy",
+#     'receiverDepth','bottomDepth', 'localArea'
+# ], inplace=True)
 
 # add Year column based on the year of the first detection time (FirstTS)
 dat_otn['Year'] = dat_otn['dateCollectedUTC'].dt.year
@@ -54,7 +64,7 @@ dat_otn['Source'] = 'OTN'
 # Rearrange columns
 dat_otn = dat_otn[
     ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime', 'Latitude', 'Longitude', 
-    'receiver','tagName', 'catalogNumber','unqDetecID']
+    'receiver','tagName', 'catalogNumber','unqDetecID','organismID']
 ]
 
 dat_otn = dat_otn.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
