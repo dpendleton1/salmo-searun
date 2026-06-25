@@ -19,15 +19,7 @@ tables = ['tblDetection', 'tblSmoltDetails', 'tblLocations', 'tblDeployment']
 #     'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
 # ]
 
-# this doesn't work
-# cols_wanted = [
-#     'SiteCode','DeploymentType','StartOrEnd','DeployDateTime','ReceiverSN','DepUTMEast','DepUTMNorth','DepUTMZone',
-#     'Array','ArrayGroup','LocationGroup','RefUTMEast','RefUTMNorth','RefUTMZone','RiverKm',
-#     'DetectionID','ReceiverSN','PingerSN','PingerIDCode','DetectDateTime',
-#     'SmoltDetailsID','SpeciesCode','ForkLength', 'Weight', 'OriginCode',        
-# ]
-
-# try this combo
+# try this combo. this worked
 cols_wanted = [
     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'PingerSN', 'DetectDateTime','DetectionID',
     'RefUTMEast', 'RefUTMNorth',
@@ -100,31 +92,7 @@ dat_nefsc = dat_nefsc[dat_nefsc['Year'] >= 2008].reset_index(drop=True)
 # sort
 dat_nefsc = dat_nefsc.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
 
-# cols_wanted = [
-#     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'DetectDateTime',
-#     'RefUTMEast', 'RefUTMNorth', 'RiverKm',
-#     'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
-# ]
-
-# this works
 # Rearrange columns
-# dat_nefsc = dat_nefsc[
-#     ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime',
-#     'OriginCode', 'ArrayGroup', 'DeploymentType', 
-#     'RefUTMEast', 'RefUTMNorth', 
-#     'RiverKm','ForkLength', 'Weight', 
-#     'ReceiverSN']
-# ]
-
-# cols_wanted = [
-#     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'PingerSN', 'DetectDateTime','DetectionID',
-#     'RefUTMEast', 'RefUTMNorth', 'RefUTMZone',
-#     'RiverKm','ForkLength', 'Weight', 
-#     'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
-#     'DeploymentType', 'DeployDateTime','DepUTMEast','DepUTMNorth','DepUTMZone',
-#     'SmoltDetailsID','SpeciesCode','StartOrEnd'
-# ]
-
 dat_nefsc = dat_nefsc[
     ['Source', 'Year',
     'SiteCode', 'ReceiverSN', 'IDCode', 'PingerSN', 'DetectDateTime', 'DetectionID',
