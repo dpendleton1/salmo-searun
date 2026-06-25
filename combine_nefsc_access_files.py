@@ -77,6 +77,38 @@ for db_file in accdb_files:
 # Combine all years
 dat_nefsc = pd.concat(all_years, ignore_index=True)
 
+# determine how many records to not have a numeric value for RiverKm
+# Check percentage of non-numeric values in RiverKm
+total = len(dat_nefsc)
+numeric_river_km = pd.to_numeric(dat_nefsc['RiverKm'], errors='coerce')
+non_numeric_count = numeric_river_km.isna().sum()
+print(f"Total records: {total}")
+print(f"Non-numeric records (including missing): {non_numeric_count}")
+print(f"Percentage: {(non_numeric_count / total) * 100:.2f}%")
+
+# list SiteCodes for records that do not have a numeric value for RiverKm
+# Find rows where RiverKm cannot be converted to numeric
+numeric_river_km = pd.to_numeric(dat_nefsc['RiverKm'], errors='coerce')
+non_numeric_rows = dat_nefsc[numeric_river_km.isna()]
+# Get unique SiteCodes
+unique_non_numeric_sites = non_numeric_rows['SiteCode'].unique()
+print(f"Unique SiteCodes with non-numeric RiverKm: {len(unique_non_numeric_sites)}")
+print(sorted(unique_non_numeric_sites))
+# >>> ['OR01', 'OR02', 'VHP1W', 'VHP2E', 'VHP2W', 'VHP3W', 'VIBL01', 'WEBBER01']
+# based on that, we can eliminate records with RiverKm > 0 AND where RiverKm has no numeric value
+#    because all those SiteCodes are not in the ocean
+
+# Remove records with RiverKm > 0 (i.e., keep only records in the ocean) OR SiteCode == 'RELEASE'
+is_release = dat_nefsc['SiteCode'] == 'RELEASE'
+# Use fillna(1) to replace missing values of RiverKm with 1, 
+# thus excluding them from this analysis, since 1 >= -3 
+# identify rows where RiverKm is <= -3 (Fort Point is at -3.88)
+is_river_minus3 = dat_nefsc['RiverKm'].fillna(1) <= -3
+# Keep only rows where RiverKm <= 0 OR it is a RELEASE record
+dat_nefsc = dat_nefsc[is_river_minus3 | is_release].reset_index(drop=True)
+
+# Now we can proceed with processing the data
+
 # Rename some columns
 dat_nefsc = dat_nefsc.rename(columns={'PingerIDCode': 'IDCode'})
 
@@ -108,7 +140,32 @@ dat_nefsc.to_csv(out_dir / "dat_nefsc.csv", index=False)
 
 # Keep only SiteCodes in the ocean
 prefixes_to_keep = ('FP', 'WP0', 'DH', 'LH', 'ER', 'MH', 'OH', 'GoMOOSF', 'GoMOOSE')
-#dat_nefsc = dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+
+# 1. Identify first match time at kept sites
+first_match = (
+    dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
+    .groupby('IDCode')['DetectDateTime']
+    .min()
+    .rename('FirstMatchTime')
+)
+
+# 2. Dataset A: Records at or after FirstMatchTime
+after_first_match = dat_nefsc['DetectDateTime'] >= first_match.reindex(dat_nefsc['IDCode']).values
+dataset_a = dat_nefsc[after_first_match].copy()
+
+# 3. Dataset B: Only 'RELEASE' records
+dataset_b = dat_nefsc[dat_nefsc['SiteCode'] == 'RELEASE'].copy()
+
+# 4. Concatenate and sort
+dat_nefsc_pb_forward = (
+    pd.concat([dataset_a, dataset_b], ignore_index=True)
+    .sort_values(['Year', 'IDCode', 'DetectDateTime'])
+    .reset_index(drop=True)
+)
+
+dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
+
+
 
 #----------------
 # 1. First, find the first match time using only the keep-prefixes
@@ -119,14 +176,25 @@ first_match = (
     .rename('FirstMatchTime')
 )
 
-# 2. Now filter the WHOLE dat_nefsc dataset, 
-# keeping records after the first match OR records that are 'RELEASE'
+# 1. Dataset A: Records that are after the first match time at a kept site
+# Note: This automatically excludes the pre-match detections (like BNHP01)
 after_first_match = dat_nefsc['DetectDateTime'] >= first_match.reindex(dat_nefsc['IDCode']).values
-is_release = dat_nefsc['SiteCode'] == 'RELEASE'
+dataset_a = dat_nefsc[after_first_match].copy()
 
-# 3. Apply filter to the full dataset
-dat_nefsc_pb_forward = dat_nefsc[after_first_match | is_release].sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
+# 2. Dataset B: Only 'RELEASE' records 
+# (This captures all release records regardless of time)
+dataset_b = dat_nefsc[dat_nefsc['SiteCode'] == 'RELEASE'].copy()
 
+# 3. Combine and drop potential duplicates
+# We drop duplicates in case a RELEASE record also happens to be after FirstMatchTime
+dat_nefsc_pb_forward = (
+    pd.concat([dataset_a, dataset_b], ignore_index=True)
+    .drop_duplicates()
+    .sort_values(['Year', 'IDCode', 'DetectDateTime'])
+    .reset_index(drop=True)
+)
+
+dat_nefsc_pb_forward = dat_nefsc_pb_forward.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
 dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
 # Keep only rows where DeploymentType is 'Deploy'
