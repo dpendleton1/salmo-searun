@@ -8,11 +8,24 @@ data_dir = Path("data/NOAA Halifax Detection Data/PN/")
 files = [f for f in sorted(data_dir.glob("pbn_matched_detections*.csv"))]
 
 # Read all files; depth columns are read as strings to handle mixed types
-# across years (2010 and 2016 have non-numeric values in these columns)
-dat_otn = pd.concat([
-    pd.read_csv(f, dtype={"bottomDepth": str, "receiverDepth": str})
-    for f in files
-], ignore_index=True)
+# across years (2010 and 2016 have non-numeric values in these columns),
+# Read all files and add a 'SourceFile' column to each
+data_frames = []
+for f in files:
+    temp_df = pd.read_csv(f, dtype={"bottomDepth": str, "receiverDepth": str})
+    temp_df['SourceFile'] = f.name
+    data_frames.append(temp_df)
+
+dat_otn = pd.concat(data_frames, ignore_index=True)
+
+# Create a list of all columns except 'SourceFile'
+subset_cols = [c for c in dat_otn.columns if c != 'SourceFile']
+
+# Find duplicates based only on those columns
+duplicates = dat_otn[dat_otn.duplicated(subset=subset_cols, keep=False)]
+duplicates.to_csv(data_dir / "dat_otn_duplicates.csv", index=False)
+
+
 
 # there should not be any duplicate records accross files, but there are. we must correct this:
 # check for duplicate rows in concatenated dataframe
