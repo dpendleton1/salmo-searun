@@ -12,12 +12,14 @@ out_dir.mkdir(exist_ok=True)
 accdb_files = sorted(db_dir.glob("*.accdb"))
 tables = ['tblDetection', 'tblSmoltDetails', 'tblLocations', 'tblDeployment']
 
-cols_wanted = [
-    'SiteCode', 'ReceiverSN', 'PingerIDCode', 'DetectDateTime',
-    'RefUTMEast', 'RefUTMNorth', 'RiverKm',
-    'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
-]
+# this works
+# cols_wanted = [
+#     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'DetectDateTime',
+#     'RefUTMEast', 'RefUTMNorth', 'RiverKm',
+#     'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
+# ]
 
+# this doesn't work
 # cols_wanted = [
 #     'SiteCode','DeploymentType','StartOrEnd','DeployDateTime','ReceiverSN','DepUTMEast','DepUTMNorth','DepUTMZone',
 #     'Array','ArrayGroup','LocationGroup','RefUTMEast','RefUTMNorth','RefUTMZone','RiverKm',
@@ -25,6 +27,15 @@ cols_wanted = [
 #     'SmoltDetailsID','SpeciesCode','ForkLength', 'Weight', 'OriginCode',        
 # ]
 
+# try this combo
+cols_wanted = [
+    'SiteCode', 'ReceiverSN', 'PingerIDCode', 'PingerSN', 'DetectDateTime','DetectionID',
+    'RefUTMEast', 'RefUTMNorth',
+    'RiverKm','ForkLength', 'Weight', 
+    'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
+    'DeploymentType', 'DeployDateTime','DepUTMEast','DepUTMNorth',
+    'SmoltDetailsID','SpeciesCode','StartOrEnd'
+]
 
 all_years = []
 
@@ -95,13 +106,33 @@ dat_nefsc = dat_nefsc.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_in
 #     'ForkLength', 'Weight', 'OriginCode', 'ArrayGroup', 'DeploymentType'
 # ]
 
+# this works
 # Rearrange columns
+# dat_nefsc = dat_nefsc[
+#     ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime',
+#     'OriginCode', 'ArrayGroup', 'DeploymentType', 
+#     'RefUTMEast', 'RefUTMNorth', 
+#     'RiverKm','ForkLength', 'Weight', 
+#     'ReceiverSN']
+# ]
+
+# cols_wanted = [
+#     'SiteCode', 'ReceiverSN', 'PingerIDCode', 'PingerSN', 'DetectDateTime','DetectionID',
+#     'RefUTMEast', 'RefUTMNorth', 'RefUTMZone',
+#     'RiverKm','ForkLength', 'Weight', 
+#     'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
+#     'DeploymentType', 'DeployDateTime','DepUTMEast','DepUTMNorth','DepUTMZone',
+#     'SmoltDetailsID','SpeciesCode','StartOrEnd'
+# ]
+
 dat_nefsc = dat_nefsc[
-    ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime',
-    'OriginCode', 'ArrayGroup', 'DeploymentType', 
-    'RefUTMEast', 'RefUTMNorth', 
-    'RiverKm','ForkLength', 'Weight', 
-    'ReceiverSN']
+    ['Source', 'Year',
+    'SiteCode', 'ReceiverSN', 'IDCode', 'PingerSN', 'DetectDateTime', 'DetectionID',
+    'RefUTMEast', 'RefUTMNorth',
+    'RiverKm', 'ForkLength', 'Weight',
+    'OriginCode', 'ArrayGroup', 'Array', 'LocationGroup',
+    'DeploymentType', 'DeployDateTime', 'DepUTMEast', 'DepUTMNorth',
+    'SmoltDetailsID', 'SpeciesCode', 'StartOrEnd']
 ]
 
 # save dat_nefsc to csv
@@ -134,7 +165,6 @@ dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
 dat_nefsc_pb_forward_deploy = dat_nefsc_pb_forward[dat_nefsc_pb_forward['DeploymentType'] == 'Deploy'].reset_index(drop=True)
 
-dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy.csv", index=False)
 
 # create latitude and longitude columns from easting, northing and UTMZone
@@ -153,33 +183,6 @@ def utm_to_latlon(row):
     return pd.Series([lat, lon])
 
 dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']] = dat_nefsc_pb_forward_deploy.apply(utm_to_latlon, axis=1)
-dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
+#dat_nefsc_pb_forward_deploy[['Latitude', 'Longitude']].dropna().head() #drops any columns that are missing either latitude or longitude
 
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy_latlon.csv", index=False)
-
-
-# BELOW THIS LINE WE DON'T NEED. KEEPING INCASE I WANT THIS CODE LATER
-# summary_fl = (
-#     first_last
-#     .rename(columns={'first': 'FirstTS', 'last': 'LastTS'})
-#     .merge(
-#         summary.drop(columns='DetectDateTime').drop_duplicates(subset=['IDCode', 'SiteCode']),
-#         on=['IDCode', 'SiteCode']
-#     )
-#     .sort_values(['IDCode', 'FirstTS'])
-#     .reset_index(drop=True)
-# )
-
-# summary_fl.shape
-
-# # reorder columns to have Year first, then PingerIDCode, SiteCode, FirstTS, LastTS, and then the rest of the columns
-# cols = summary_fl.columns.tolist()
-# cols = ['Year', 'IDCode', 'SiteCode', 'FirstTS', 'LastTS'] + [c for c in cols if c not in ['Year', 'IDCode', 'SiteCode', 'FirstTS', 'LastTS']]
-# summary_fl = summary_fl[cols]
-
-# # sort the dataframe by Year, then PingerIDCode, then SiteCode, then FirstTS
-# summary_fl = summary_fl.sort_values(['Year', 'IDCode', 'FirstTS', 'SiteCode']).reset_index(drop=True)
-
-# summary_fl.head()
-# summary_fl.shape
-# summary_fl.to_csv(out_dir / "combined_all_years_ocean_onlyFL.csv", index=False)
