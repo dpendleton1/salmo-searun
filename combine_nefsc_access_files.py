@@ -6,7 +6,8 @@ from io import StringIO
 import re
 
 db_dir = Path("data/Penobscot Access Databases")
-out_dir = db_dir / "csv_export"
+out_dir = Path("data/output_files")
+
 out_dir.mkdir(exist_ok=True)
 
 accdb_files = sorted(db_dir.glob("*.accdb"))

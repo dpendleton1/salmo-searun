@@ -2,7 +2,8 @@
 # then, use a nearest neighbour join to associate OTN sites with their closest NEFSC site, and inspect the distance distribution to determine a reasonable threshold for "co-located" sites. This will help us decide whether to concatenate SiteCodes for nearby sites or keep them separate.
 
 # load the .csv
-dat = pd.read_csv("data/dat_otn_nefsc_combined.csv", parse_dates=["DetectDateTime"])
+out_dir = Path("data/output_files")
+dat = pd.read_csv(out_dir / "dat_otn_nefsc_combined.csv", parse_dates=["DetectDateTime"])
 
 # plot sitecodes from 'dat'
 import pandas as pd
@@ -68,7 +69,7 @@ legend_html = """
 """
 m.get_root().html.add_child(folium.Element(legend_html))
 
-m.save("data/otn_nefsc_sites_map.html")
+m.save(out_dir / "otn_nefsc_sites_map.html")
 m
 
 
@@ -115,7 +116,7 @@ plt.show()
 # Rows where OTN and NEFSC sites are co-located (within 500 m)
 threshold_m = 500  # adjust based on the distance histogram
 matched = joined[joined['dist_m'] <= threshold_m][['SiteCode_left', 'SiteCode_right', 'dist_m']]
-matched.to_csv("data/otn_nefsc_sitecode_matches.csv", index=False)
+matched.to_csv(out_dir / "otn_nefsc_sitecode_matches.csv", index=False)
 
 joined['SiteCode_combined'] = joined.apply(
     lambda r: f"{r['SiteCode_left']}_{r['SiteCode_right']}" 
@@ -129,7 +130,7 @@ groupings = joined.groupby('SiteCode_combined')['SiteCode_left'].apply(list).res
 groupings
 
 matched['SiteCode_new'] = matched['SiteCode_right'].str[:2]
-matched.to_csv("data/otn_nefsc_sitecode_matches1.csv", index=False)
+matched.to_csv(out_dir / "otn_nefsc_sitecode_matches1.csv", index=False)
 
 nefsc_prefixes = ('FP', 'WP', 'LH', 'DH', 'ER', 'OH', 'MH')
 otn_map = matched.set_index('SiteCode_left')['SiteCode_new'].to_dict()
@@ -154,7 +155,7 @@ otn_unmapped_after = dat[otn_mask & dat['SiteCode_new'].isna()]
 print(f"OTN rows still unmatched: {len(otn_unmapped_after)}")
 
 dat = dat.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
-dat.to_csv("data/dat_otn_nefsc_combined_sitecodes.csv", index=False)
+dat.to_csv(out_dir / "dat_otn_nefsc_combined_sitecodes.csv", index=False)
 
 # IDCodes that were detected at least once at an HFX site
 hfx_ids = set(dat.loc[dat['SiteCode'].str.startswith('HFX', na=False), 'IDCode'])
@@ -168,4 +169,4 @@ dat = dat[
     'receiver','tagName', 'catalogNumber','unqDetecID', 'ForkLength', 'Weight']
 ]
 
-dat.to_csv("data/dat_otn_nefsc_combined_sitecodes_hfx.csv", index=False)
+dat.to_csv(out_dir / "dat_otn_nefsc_combined_sitecodes_hfx.csv", index=False)

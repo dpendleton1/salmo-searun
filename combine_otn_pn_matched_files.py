@@ -1,6 +1,8 @@
 import pandas as pd
 from pathlib import Path
 
+out_dir = Path("data/output_files")
+
 # Directory containing the annual pbn_matched_detections CSV files
 data_dir = Path("data/NOAA Halifax Detection Data/PN/")
 
@@ -82,4 +84,4 @@ dat_otn = dat_otn.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(
 dat_otn.head()
 
 # Write the dat_otn dataset to a single CSV in the same directory
-dat_otn.to_csv(data_dir / "dat_otn.csv", index=False)
+dat_otn.to_csv(out_dir / "dat_otn.csv", index=False)

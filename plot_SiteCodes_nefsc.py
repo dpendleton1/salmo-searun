@@ -1,6 +1,9 @@
 import pandas as pd
 import folium
 from pyproj import Transformer
+import os
+
+out_dir = Path("data/output_files")
 
 summary = dat_nefsc_pb_forward_deploy
 
@@ -36,6 +39,5 @@ for _, row in sites.iterrows():
         tooltip=row["SiteCode"]
     ).add_to(m)
 
-m.save("data/Penobscot Access Databases/csv_export/site_map_nefsc.html")
+m.save(os.path.join(out_dir, "site_map_nefsc.html"))
 m
-
