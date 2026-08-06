@@ -5,10 +5,10 @@
 
 import pandas as pd
 
-dat_nefsc_pb_forward = pd.read_csv("data/Penobscot Access Databases/csv_export/dat_nefsc_pb_forward.csv", parse_dates=["DetectDateTime"])
+dat_nefsc_pb_forward_deploy_latlon = pd.read_csv("data/Penobscot Access Databases/csv_export/dat_nefsc_pb_forward_deploy_latlon.csv", parse_dates=["DetectDateTime"])
 dat_otn = pd.read_csv("data/NOAA Halifax Detection Data/PN/dat_otn.csv", parse_dates=["DetectDateTime"])
 
-merged = pd.concat([dat_otn, dat_nefsc_pb_forward], ignore_index=True, sort=False)
+merged = pd.concat([dat_otn, dat_nefsc_pb_forward_deploy_latlon], ignore_index=True, sort=False)
 merged['DetectDateTime'] = pd.to_datetime(merged['DetectDateTime'], format='ISO8601')
 merged = merged.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
 

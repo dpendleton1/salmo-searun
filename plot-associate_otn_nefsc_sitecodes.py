@@ -43,6 +43,8 @@ for _, row in otn_sites.iterrows():
         tooltip=f"OTN: {row['SiteCode']}"
     ).add_to(m)
 
+#if you don't dropna, then plot won't work because NEFSC has some rows without lat/long, why is that?
+nefsc_sites = nefsc_sites.dropna(subset=['Latitude', 'Longitude'])
 for _, row in nefsc_sites.iterrows():
     folium.CircleMarker(
         location=[row['Latitude'], row['Longitude']],

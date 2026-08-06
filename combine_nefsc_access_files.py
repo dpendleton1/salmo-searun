@@ -165,38 +165,6 @@ dat_nefsc_pb_forward = (
 
 dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
-
-
-#----------------
-# 1. First, find the first match time using only the keep-prefixes
-first_match = (
-    dat_nefsc[dat_nefsc['SiteCode'].str.startswith(prefixes_to_keep, na=False)]
-    .groupby('IDCode')['DetectDateTime']
-    .min()
-    .rename('FirstMatchTime')
-)
-
-# 1. Dataset A: Records that are after the first match time at a kept site
-# Note: This automatically excludes the pre-match detections (like BNHP01)
-after_first_match = dat_nefsc['DetectDateTime'] >= first_match.reindex(dat_nefsc['IDCode']).values
-dataset_a = dat_nefsc[after_first_match].copy()
-
-# 2. Dataset B: Only 'RELEASE' records 
-# (This captures all release records regardless of time)
-dataset_b = dat_nefsc[dat_nefsc['SiteCode'] == 'RELEASE'].copy()
-
-# 3. Combine and drop potential duplicates
-# We drop duplicates in case a RELEASE record also happens to be after FirstMatchTime
-dat_nefsc_pb_forward = (
-    pd.concat([dataset_a, dataset_b], ignore_index=True)
-    .drop_duplicates()
-    .sort_values(['Year', 'IDCode', 'DetectDateTime'])
-    .reset_index(drop=True)
-)
-
-dat_nefsc_pb_forward = dat_nefsc_pb_forward.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
-dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
-
 # Keep only rows where DeploymentType is 'Deploy'
 dat_nefsc_pb_forward_deploy = dat_nefsc_pb_forward[dat_nefsc_pb_forward['DeploymentType'] == 'Deploy'].reset_index(drop=True)
 dat_nefsc_pb_forward_deploy.to_csv(out_dir / "dat_nefsc_pb_forward_deploy.csv", index=False)

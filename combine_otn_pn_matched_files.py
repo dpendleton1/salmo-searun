@@ -62,10 +62,20 @@ dat_otn.rename(columns={
 # add "OTN" identier for the source of the data
 dat_otn['Source'] = 'OTN'
 
+# here is a list of columns for reference, which you can use below to rearrange columns
+# dat_otn.columns
+# Index(['collectionCode', 'catalogNumber', 'organismID', 'scientificName', 'commonName', 'dateLastModified', 'detectedBy',
+#        'SiteCode', 'receiver', 'bottomDepth', 'receiverDepth', 'tagName', 'codeSpace', 'sensorName', 'sensorRaw',
+#        'sensorType', 'sensorValue', 'sensorUnit', 'DetectDateTime', 'uncorrectedDateCollectedUTC', 'Longitude', 'Latitude',
+#        'geodeticDatum', 'geometry', 'localArea', 'citation', 'unqDetecID', 'contactPOC', 'contactPI', 'IDCode', 'Year',
+#        'Source'],
+#       dtype='str')
+
 # Rearrange columns
 dat_otn = dat_otn[
     ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime', 'Latitude', 'Longitude', 
-    'receiver','tagName', 'catalogNumber','unqDetecID','organismID']
+    'receiver','tagName', 'catalogNumber','unqDetecID','organismID',
+    'codeSpace', 'scientificName','collectionCode', 'dateLastModified']
 ]
 
 dat_otn = dat_otn.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
