@@ -8,6 +8,7 @@ dat = pd.read_csv(out_dir / "dat_otn_nefsc_combined.csv", parse_dates=["DetectDa
 # plot sitecodes from 'dat'
 import pandas as pd
 import folium
+d
 
 # Unique OTN sites
 otn_sites = (
