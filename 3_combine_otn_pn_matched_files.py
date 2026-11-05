@@ -1,87 +1,101 @@
-import pandas as pd
+"""
+Combine and Process OTN / PN Matched Detection Files
+
+This script reads annual OTN / PBN matched detection CSV exports, consolidates
+them, identifies and exports cross-file duplicates, standardizes timestamps and
+column names, extracts tag ID codes, and writes out the cleaned dataset.
+"""
+
 from pathlib import Path
 
+import pandas as pd
+
+# -----------------------------------------------------------------------------
+# Configuration and Data Ingestion
+# -----------------------------------------------------------------------------
+
 out_dir = Path("data/output_files")
+out_dir.mkdir(exist_ok=True)
 
-# Directory containing the annual pbn_matched_detections CSV files
 data_dir = Path("data/NOAA Halifax Detection Data/PN/")
+files = sorted(data_dir.glob("pbn_matched_detections*.csv"))
 
-# Collect all matching files, excluding 2014 (empty file with a different schema)
-files = [f for f in sorted(data_dir.glob("pbn_matched_detections*.csv"))]
-
-# Read all files; depth columns are read as strings to handle mixed types
-# across years (2010 and 2016 have non-numeric values in these columns),
-# Read all files and add a 'SourceFile' column to each
+# Read all files, retaining source file tracking for duplicate auditing
 data_frames = []
 for f in files:
     temp_df = pd.read_csv(f, dtype={"bottomDepth": str, "receiverDepth": str})
-    temp_df['SourceFile'] = f.name
+    temp_df["SourceFile"] = f.name
     data_frames.append(temp_df)
 
 dat_otn = pd.concat(data_frames, ignore_index=True)
 
-# there should not be any duplicate records accross files, but there are. we must correct this:
-# check for duplicate rows in concatenated dataframe
-# Show all rows that are duplicates of another row
-# We do not want to include SourceFile in the subset for finding duplicates, as we want to find duplicates across files
-# Create a list of all columns except 'SourceFile'
-subset_cols = [c for c in dat_otn.columns if c != 'SourceFile']
-# Find duplicates based only the subset of columns not including SourceFile
+# -----------------------------------------------------------------------------
+# Duplicate Detection and Removal
+# -----------------------------------------------------------------------------
+
+# Identify rows duplicated across different source files
+subset_cols = [c for c in dat_otn.columns if c != "SourceFile"]
 duplicates = dat_otn[dat_otn.duplicated(subset=subset_cols, keep=False)]
-# write out a .csv file showing all duplicates, and include 'SourceFile' so we can see which files the duplicates came from
-duplicates.to_csv(data_dir / "dat_otn_duplicates.csv", index=False)
+duplicates.to_csv(out_dir / "dat_otn_duplicates.csv", index=False)
 
-# Remove all rows that are exact duplicates
-dat_otn = dat_otn.drop_duplicates()
-# We no longer need the SourceFile column, so we can drop it, along with all the duplicate rows. 
-dat_otn = dat_otn.drop(columns=['SourceFile'])
+# Remove exact duplicates and drop tracking column
+dat_otn = dat_otn.drop_duplicates().drop(columns=["SourceFile"])
 
-# Cast depth columns to float; invalid/empty strings become NaN
+# -----------------------------------------------------------------------------
+# Standardization and Column Cleanup
+# -----------------------------------------------------------------------------
+
+# Cast depth columns to float (invalid/empty strings become NaN)
 dat_otn["bottomDepth"] = pd.to_numeric(dat_otn["bottomDepth"], errors="coerce")
-dat_otn["receiverDepth"] = pd.to_numeric(dat_otn["receiverDepth"], errors="coerce")
+dat_otn["receiverDepth"] = pd.to_numeric(
+    dat_otn["receiverDepth"], errors="coerce"
+)
 
-# Parse dateCollectedUTC explicitly in case parse_dates silently failed
-dat_otn["dateCollectedUTC"] = pd.to_datetime(dat_otn["dateCollectedUTC"], format="ISO8601", utc=True)
-
-# Strip timezone info before writing (values are already UTC)
+# Parse and normalize timestamps to naive UTC
+dat_otn["dateCollectedUTC"] = pd.to_datetime(
+    dat_otn["dateCollectedUTC"], format="ISO8601", utc=True
+)
 dat_otn["dateCollectedUTC"] = dat_otn["dateCollectedUTC"].dt.tz_localize(None)
 
-# Extract the digits after the last dash in tagName as an integer ID code
-# e.g. A69-1601-8651 -> 8651
+# Extract integer ID code from tagName (e.g., A69-1601-8651 -> 8651)
 dat_otn["IDCode"] = dat_otn["tagName"].str.split("-").str[-1].astype("Int64")
+dat_otn["Year"] = dat_otn["dateCollectedUTC"].dt.year
+dat_otn["Source"] = "OTN"
 
-# add Year column based on the year of the first detection time (FirstTS)
-dat_otn['Year'] = dat_otn['dateCollectedUTC'].dt.year
+# Rename key columns for consistency with NEFSC datasets
+dat_otn = dat_otn.rename(
+    columns={
+        "decimalLongitude": "Longitude",
+        "decimalLatitude": "Latitude",
+        "dateCollectedUTC": "DetectDateTime",
+        "station": "SiteCode",
+    }
+)
 
-# Rename columns
-dat_otn.rename(columns={
-    "decimalLongitude": "Longitude",
-    "decimalLatitude": "Latitude",
-    "dateCollectedUTC": "DetectDateTime",
-    "station": "SiteCode",
-}, inplace=True)
-
-# add "OTN" identier for the source of the data
-dat_otn['Source'] = 'OTN'
-
-# here is a list of columns for reference, which you can use below to rearrange columns
-# dat_otn.columns
-# Index(['collectionCode', 'catalogNumber', 'organismID', 'scientificName', 'commonName', 'dateLastModified', 'detectedBy',
-#        'SiteCode', 'receiver', 'bottomDepth', 'receiverDepth', 'tagName', 'codeSpace', 'sensorName', 'sensorRaw',
-#        'sensorType', 'sensorValue', 'sensorUnit', 'DetectDateTime', 'uncorrectedDateCollectedUTC', 'Longitude', 'Latitude',
-#        'geodeticDatum', 'geometry', 'localArea', 'citation', 'unqDetecID', 'contactPOC', 'contactPI', 'IDCode', 'Year',
-#        'Source'],
-#       dtype='str')
-
-# Rearrange columns
+# Reorder columns
 dat_otn = dat_otn[
-    ['Source', 'Year', 'IDCode', 'SiteCode', 'DetectDateTime', 'Latitude', 'Longitude', 
-    'receiver','tagName', 'catalogNumber','unqDetecID','organismID',
-    'codeSpace', 'scientificName','collectionCode', 'dateLastModified']
+    [
+        "Source",
+        "Year",
+        "IDCode",
+        "SiteCode",
+        "DetectDateTime",
+        "Latitude",
+        "Longitude",
+        "receiver",
+        "tagName",
+        "catalogNumber",
+        "unqDetecID",
+        "organismID",
+        "codeSpace",
+        "scientificName",
+        "collectionCode",
+        "dateLastModified",
+    ]
 ]
 
-dat_otn = dat_otn.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
-dat_otn.head()
-
-# Write the dat_otn dataset to a single CSV in the same directory
+# Sort and export cleaned OTN dataset
+dat_otn = dat_otn.sort_values(
+    ["Year", "IDCode", "DetectDateTime"]
+).reset_index(drop=True)
 dat_otn.to_csv(out_dir / "dat_otn.csv", index=False)

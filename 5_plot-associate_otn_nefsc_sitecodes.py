@@ -1,63 +1,75 @@
-# plot OTN and NEFSC sitecodes on a map to visually inspect for co-located sites. This is a precursor to the "nearest neighbour" join in the next script, which will attempt to associate OTN sites with their nearest NEFSC site (if within a reasonable distance threshold).
-# then, use a nearest neighbour join to associate OTN sites with their closest NEFSC site, and inspect the distance distribution to determine a reasonable threshold for "co-located" sites. This will help us decide whether to concatenate SiteCodes for nearby sites or keep them separate.
+"""
+Map and Associate OTN and NEFSC Receiver Site Codes
 
-# load the .csv
-out_dir = Path("data/output_files")
-dat = pd.read_csv(out_dir / "dat_otn_nefsc_combined.csv", parse_dates=["DetectDateTime"])
+This script maps unique OTN and NEFSC receiver locations, performs a spatial
+nearest-neighbor join to associate OTN sites with nearby NEFSC array stations,
+visualizes the distance distribution, and standardizes site codes across both data
+sources.
+"""
 
-# plot sitecodes from 'dat'
-import pandas as pd
+from pathlib import Path
+
 import folium
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import pandas as pd
 
-# Unique OTN sites
+# -----------------------------------------------------------------------------
+# Configuration and Data Loading
+# -----------------------------------------------------------------------------
+
+out_dir = Path("data/output_files")
+dat = pd.read_csv(
+    out_dir / "dat_otn_nefsc_combined.csv", parse_dates=["DetectDateTime"]
+)
+
+# Extract unique site locations for each data source
 otn_sites = (
-    dat[dat['Source'] == 'OTN']
-    [['SiteCode', 'Latitude', 'Longitude']]
+    dat[dat["Source"] == "OTN"][["SiteCode", "Latitude", "Longitude"]]
     .drop_duplicates()
     .reset_index(drop=True)
 )
 
-# Unique NEFSC sites
 nefsc_sites = (
-    dat[dat['Source'] == 'NEFSC']
-    [['SiteCode', 'Latitude', 'Longitude']]
+    dat[dat["Source"] == "NEFSC"][["SiteCode", "Latitude", "Longitude"]]
     .drop_duplicates()
+    .dropna(subset=["Latitude", "Longitude"])
     .reset_index(drop=True)
 )
 
-# Center map on mean coords of all sites combined
-all_sites = pd.concat([otn_sites, nefsc_sites])
+# -----------------------------------------------------------------------------
+# Interactive Map Generation
+# -----------------------------------------------------------------------------
 
+all_sites = pd.concat([otn_sites, nefsc_sites])
 m = folium.Map(
-    location=[all_sites['Latitude'].mean(), all_sites['Longitude'].mean()],
-    zoom_start=8
+    location=[all_sites["Latitude"].mean(), all_sites["Longitude"].mean()],
+    zoom_start=8,
 )
 
 for _, row in otn_sites.iterrows():
     folium.CircleMarker(
-        location=[row['Latitude'], row['Longitude']],
+        location=[row["Latitude"], row["Longitude"]],
         radius=6,
-        color='steelblue',
+        color="steelblue",
         fill=True,
-        fill_color='steelblue',
+        fill_color="steelblue",
         fill_opacity=0.8,
-        tooltip=f"OTN: {row['SiteCode']}"
+        tooltip=f"OTN: {row['SiteCode']}",
     ).add_to(m)
 
-#if you don't dropna, then plot won't work because NEFSC has some rows without lat/long, why is that?
-nefsc_sites = nefsc_sites.dropna(subset=['Latitude', 'Longitude'])
 for _, row in nefsc_sites.iterrows():
     folium.CircleMarker(
-        location=[row['Latitude'], row['Longitude']],
+        location=[row["Latitude"], row["Longitude"]],
         radius=6,
-        color='orange',
+        color="orange",
         fill=True,
-        fill_color='orange',
+        fill_color="orange",
         fill_opacity=0.8,
-        tooltip=f"NEFSC: {row['SiteCode']}"
+        tooltip=f"NEFSC: {row['SiteCode']}",
     ).add_to(m)
 
-# Legend
+# Add map legend
 legend_html = """
 <div style="position: fixed; bottom: 30px; left: 30px; z-index: 1000;
      background-color: white; padding: 10px 15px; border-radius: 6px;
@@ -68,105 +80,101 @@ legend_html = """
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
-
 m.save(out_dir / "otn_nefsc_sites_map.html")
-m
 
+# -----------------------------------------------------------------------------
+# Spatial Nearest-Neighbor Association
+# -----------------------------------------------------------------------------
 
-# inspect neighboring locations of SiteCodes from OTN and NEFSC to see if there are any that are co-located (e.g. within some threshold that we determine below). 
-# this will help us decide whether to concatenate SiteCodes for nearby sites or keep them separate in the combined dataset.
-import geopandas as gpd
-from shapely.geometry import Point
-
-# Build GeoDataFrames for unique sites
+# Convert to projected CRS (UTM Zone 19N, units in meters) for spatial joins
 gdf_otn = gpd.GeoDataFrame(
     otn_sites,
-    geometry=gpd.points_from_xy(otn_sites['Longitude'], otn_sites['Latitude']),
-    crs="EPSG:4326"
-).to_crs(epsg=32619)  # UTM zone 19N — good for Maine/Nova Scotia, units in metres
+    geometry=gpd.points_from_xy(otn_sites["Longitude"], otn_sites["Latitude"]),
+    crs="EPSG:4326",
+).to_crs(epsg=32619)
 
 gdf_nefsc = gpd.GeoDataFrame(
     nefsc_sites,
-    geometry=gpd.points_from_xy(nefsc_sites['Longitude'], nefsc_sites['Latitude']),
-    crs="EPSG:4326"
+    geometry=gpd.points_from_xy(
+        nefsc_sites["Longitude"], nefsc_sites["Latitude"]
+    ),
+    crs="EPSG:4326",
 ).to_crs(epsg=32619)
 
-# Nearest neighbour join: for each OTN site, find the closest NEFSC site
+# Find nearest NEFSC site for each OTN site
 joined = gpd.sjoin_nearest(
     gdf_otn,
-    gdf_nefsc[['SiteCode', 'geometry']],
-    how='left',
-    distance_col='dist_m'
+    gdf_nefsc[["SiteCode", "geometry"]],
+    how="left",
+    distance_col="dist_m",
 )
 
-# Inspect the distance distribution before committing to a threshold
-joined[['SiteCode_left', 'SiteCode_right', 'dist_m']].sort_values('dist_m').head(20)
-
-# This gives you a table of OTN sites paired with their nearest NEFSC site and the distance in metres. From there you can:
-# Inspect the distance distribution — plot a histogram of dist_m to find a natural break that separates "genuinely nearby" from "incidentally closest"
-# Apply a threshold — e.g. only concatenate where dist_m < 500 (500 m), leaving distant pairs unchanged:
-
-import matplotlib.pyplot as plt
-
-joined['dist_m'].plot.hist(bins=50)
-plt.xlabel('Distance to nearest NEFSC site (m)')
-plt.title('OTN → nearest NEFSC distance distribution')
+# Plot distance distribution
+joined["dist_m"].plot.hist(bins=50)
+plt.xlabel("Distance to nearest NEFSC site (m)")
+plt.title("OTN → nearest NEFSC distance distribution")
 plt.show()
 
-# Rows where OTN and NEFSC sites are co-located (within 500 m)
-threshold_m = 500  # adjust based on the distance histogram
-matched = joined[joined['dist_m'] <= threshold_m][['SiteCode_left', 'SiteCode_right', 'dist_m']]
+# Apply distance threshold (500m) for co-located sites
+threshold_m = 500
+matched = joined[joined["dist_m"] <= threshold_m][
+    ["SiteCode_left", "SiteCode_right", "dist_m"]
+]
 matched.to_csv(out_dir / "otn_nefsc_sitecode_matches.csv", index=False)
 
-joined['SiteCode_combined'] = joined.apply(
-    lambda r: f"{r['SiteCode_left']}_{r['SiteCode_right']}" 
-              if r['dist_m'] <= threshold_m 
-              else r['SiteCode_left'],
-    axis=1
-)
+# -----------------------------------------------------------------------------
+# Site Code Standardization and Export
+# -----------------------------------------------------------------------------
 
-# now we make a list of SiteCodes to group together in the combined dataset. This will be used in the next script to concatenate SiteCodes for nearby sites.
-groupings = joined.groupby('SiteCode_combined')['SiteCode_left'].apply(list).reset_index()
-groupings
-
-matched['SiteCode_new'] = matched['SiteCode_right'].str[:2]
+matched["SiteCode_new"] = matched["SiteCode_right"].str[:2]
 matched.to_csv(out_dir / "otn_nefsc_sitecode_matches1.csv", index=False)
 
-nefsc_prefixes = ('FP', 'WP', 'LH', 'DH', 'ER', 'OH', 'MH')
-otn_map = matched.set_index('SiteCode_left')['SiteCode_new'].to_dict()
+nefsc_prefixes = ("FP", "WP", "LH", "DH", "ER", "OH", "MH")
+otn_map = matched.set_index("SiteCode_left")["SiteCode_new"].to_dict()
 
-# Default: retain original SiteCode
-dat['SiteCode_new'] = dat['SiteCode']
+# Standardize site codes
+dat["SiteCode_new"] = dat["SiteCode"]
 
-# OTN: map via matched lookup
-otn_mask = dat['Source'] == 'OTN'
-dat.loc[otn_mask, 'SiteCode_new'] = dat.loc[otn_mask, 'SiteCode'].map(otn_map)
+otn_mask = dat["Source"] == "OTN"
+dat.loc[otn_mask, "SiteCode_new"] = dat.loc[otn_mask, "SiteCode"].map(otn_map)
 
-# NEFSC: use first 2 chars if SiteCode starts with a known prefix
-nefsc_prefix_mask = (dat['Source'] == 'NEFSC') & dat['SiteCode'].str.startswith(nefsc_prefixes, na=False)
-dat.loc[nefsc_prefix_mask, 'SiteCode_new'] = dat.loc[nefsc_prefix_mask, 'SiteCode'].str[:2]
+nefsc_prefix_mask = (dat["Source"] == "NEFSC") & dat[
+    "SiteCode"
+].str.startswith(nefsc_prefixes, na=False)
+dat.loc[nefsc_prefix_mask, "SiteCode_new"] = dat.loc[
+    nefsc_prefix_mask, "SiteCode"
+].str[:2]
 
-dat[['Source', 'SiteCode', 'SiteCode_new']].drop_duplicates().sort_values(['Source', 'SiteCode']).head(20)
-
-dat.loc[otn_mask & dat['SiteCode_new'].isna(), 'SiteCode_new'] = dat.loc[otn_mask & dat['SiteCode_new'].isna(), 'SiteCode']
-
-# Verify
-otn_unmapped_after = dat[otn_mask & dat['SiteCode_new'].isna()]
-print(f"OTN rows still unmatched: {len(otn_unmapped_after)}")
-
-dat = dat.sort_values(['Year', 'IDCode', 'DetectDateTime']).reset_index(drop=True)
-dat.to_csv(out_dir / "dat_otn_nefsc_combined_sitecodes.csv", index=False)
-
-# IDCodes that were detected at least once at an HFX site
-hfx_ids = set(dat.loc[dat['SiteCode'].str.startswith('HFX', na=False), 'IDCode'])
-
-# Keep only rows whose IDCode appears in that set
-dat = dat[dat['IDCode'].isin(hfx_ids)].reset_index(drop=True)
-
-# Rearrange columns
-dat = dat[
-    ['Source', 'Year', 'IDCode', 'SiteCode', 'SiteCode_new', 'DetectDateTime', 'Latitude', 'Longitude', 
-    'receiver','tagName', 'catalogNumber','unqDetecID', 'ForkLength', 'Weight']
+dat.loc[otn_mask & dat["SiteCode_new"].isna(), "SiteCode_new"] = dat.loc[
+    otn_mask & dat["SiteCode_new"].isna(), "SiteCode"
 ]
 
+dat = dat.sort_values(["Year", "IDCode", "DetectDateTime"]).reset_index(drop=True)
+dat.to_csv(out_dir / "dat_otn_nefsc_combined_sitecodes.csv", index=False)
+
+# Filter for IDs detected at least once at an HFX site
+hfx_ids = set(
+    dat.loc[dat["SiteCode"].str.startswith("HFX", na=False), "IDCode"]
+)
+dat = dat[dat["IDCode"].isin(hfx_ids)].reset_index(drop=True)
+
+# Rearrange columns and export final filtered dataset
+dat = dat[
+    [
+        "Source",
+        "Year",
+        "IDCode",
+        "SiteCode",
+        "SiteCode_new",
+        "DetectDateTime",
+        "Latitude",
+        "Longitude",
+        "receiver",
+        "tagName",
+        "catalogNumber",
+        "unqDetecID",
+        "ForkLength",
+        "Weight",
+    ]
+]
 dat.to_csv(out_dir / "dat_otn_nefsc_combined_sitecodes_hfx.csv", index=False)
