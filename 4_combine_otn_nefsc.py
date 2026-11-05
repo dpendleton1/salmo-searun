@@ -46,8 +46,30 @@ dupes = (
 )
 print(f"Rows with matching SiteCode+DetectDateTime but different Source: {len(dupes)}")
 
-# Export combined dataset
-merged.to_csv(out_dir / "dat_otn_nefsc_combined.csv", index=False)
+# -----------------------------------------------------------------------------
+# Spatial Filtering (Remove sites south of Portsmouth, NH / west of Chatham, MA / east of -50.0°)
+# -----------------------------------------------------------------------------
+
+# save a copy of 'merged' that includes erroneous locations
+merged_with_bad_locs = merged
+
+portsmouth_lat = 43.0718
+chatham_lon = -69.9697
+east_lon_threshold = -50.0
+
+# Identify and remove records located south of Portsmouth (< 43.0718) and west of Chatham (< -69.9697)
+is_south_west = (merged["Latitude"] < portsmouth_lat) & (merged["Longitude"] < chatham_lon)
+print(f"Removing {is_south_west.sum()} records south of Portsmouth and west of Chatham.")
+
+# Identify and remove records located east of -50.0 degrees (> -50.0)
+is_east = merged["Longitude"] > east_lon_threshold
+print(f"Removing {is_east.sum()} records east of -50.0 degrees longitude.")
+
+# Save removed records to CSV
+removed_records = merged[is_south_west | is_east]
+removed_records.to_csv(out_dir / "dat_otn_nefsc_removed.csv", index=False)
+
+merged = merged[~(is_south_west | is_east)].reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
 # Deduplication of Release Records

@@ -81,6 +81,7 @@ legend_html = """
 """
 m.get_root().html.add_child(folium.Element(legend_html))
 m.save(out_dir / "otn_nefsc_sites_map.html")
+m
 
 # -----------------------------------------------------------------------------
 # Spatial Nearest-Neighbor Association
