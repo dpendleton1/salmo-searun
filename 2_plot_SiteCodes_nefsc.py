@@ -1,8 +1,8 @@
 """
 Plot NEFSC Acoustic Receiver Site Locations
 
-This script loads the processed deployment dataset, extracts unique site
-coordinates, and generates an interactive Folium map showing receiver locations
+This script loads the processed deployment dataset (produced by '1_combine_nefsc_access_files.py'), 
+extracts unique SiteCode coordinates, and generates an interactive Folium map showing receiver locations
 with popups and tooltips.
 """
 

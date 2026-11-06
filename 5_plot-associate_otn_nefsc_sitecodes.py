@@ -121,14 +121,13 @@ threshold_m = 500
 matched = joined[joined["dist_m"] <= threshold_m][
     ["SiteCode_left", "SiteCode_right", "dist_m"]
 ]
+matched["SiteCode_new"] = matched["SiteCode_right"].str[:2]
 matched.to_csv(out_dir / "otn_nefsc_sitecode_matches.csv", index=False)
 
 # -----------------------------------------------------------------------------
 # Site Code Standardization and Export
 # -----------------------------------------------------------------------------
 
-matched["SiteCode_new"] = matched["SiteCode_right"].str[:2]
-matched.to_csv(out_dir / "otn_nefsc_sitecode_matches1.csv", index=False)
 
 nefsc_prefixes = ("FP", "WP", "LH", "DH", "ER", "OH", "MH")
 otn_map = matched.set_index("SiteCode_left")["SiteCode_new"].to_dict()

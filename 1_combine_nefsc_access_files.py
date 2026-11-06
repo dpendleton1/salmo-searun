@@ -1,7 +1,7 @@
 """
 Combine and Process NEFSC Access Database Files
 
-This script reads raw Microsoft Access databases (.accdb) exported via mdb-tools,
+This script reads raw *NEFSC* Microsoft Access databases (.accdb) exported via mdb-tools,
 standardizes datetimes and column names, applies spatial filtering (Penobscot
 Bay and coastal/ocean receiver arrays), calculates forward-moving tracks from
 first oceanic detection, and transforms UTM coordinates to latitude/longitude.
@@ -213,7 +213,7 @@ dat_nefsc_pb_forward = (
 )
 dat_nefsc_pb_forward.to_csv(out_dir / "dat_nefsc_pb_forward.csv", index=False)
 
-# Filter for active deployments only
+# Filter for deployments only
 dat_nefsc_pb_forward_deploy = dat_nefsc_pb_forward[
     dat_nefsc_pb_forward["DeploymentType"] == "Deploy"
 ].reset_index(drop=True)
@@ -243,3 +243,4 @@ dat_nefsc_pb_forward_deploy[["Latitude", "Longitude"]] = (
 dat_nefsc_pb_forward_deploy.to_csv(
     out_dir / "dat_nefsc_pb_forward_deploy_latlon.csv", index=False
 )
+    

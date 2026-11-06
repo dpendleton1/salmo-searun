@@ -3,7 +3,8 @@ Combine OTN and NEFSC Datasets
 
 This script loads the processed OTN and NEFSC deployment and detection datasets,
 combines them into a unified tracking dataframe, identifies overlapping records
-across sources, and exports the combined dataset.
+across sources, and exports the combined dataset as well as a dataset of detections
+that we believe are erroneous due to them being scatterd in SE US, SW US, and Europe.
 """
 
 from pathlib import Path
@@ -45,6 +46,7 @@ dupes = (
     .filter(lambda x: x["Source"].nunique() > 1)
 )
 print(f"Rows with matching SiteCode+DetectDateTime but different Source: {len(dupes)}")
+# Hopefully there are zero dups printed out
 
 # -----------------------------------------------------------------------------
 # Spatial Filtering (Remove sites south of Portsmouth, NH / west of Chatham, MA / east of -50.0°)
